@@ -1,0 +1,211 @@
+===========================================================================
+  FastLex: Installation and Usage Guide
+===========================================================================
+
+
+1. REQUIREMENTS
+---------------------------------------------------------------------------
+
+You need Python 3.8 or later, plus two packages (pandas and tqdm). A third
+package (rapidfuzz) is optional but strongly recommended -- it provides a
+much faster edit-distance backend.
+
+To check your Python version:
+
+    python --version       # or python3 --version
+
+NOTE: On some systems, the command is "python3" rather than "python". If
+the example scripts fail with "command not found", either create an alias
+(alias python=python3) or edit the scripts to use "python3".
+
+To install the required packages:
+
+    pip install -r requirements.txt
+
+That will install pandas, tqdm, and rapidfuzz. If you prefer to install
+them individually:
+
+    pip install pandas tqdm
+    pip install rapidfuzz       # optional but recommended
+
+
+2. MAKING FASTLEX AVAILABLE SYSTEM-WIDE (optional)
+---------------------------------------------------------------------------
+
+If you want to run FastLex from any directory without typing the full path,
+you can create a symlink in a directory that is already on your PATH.
+A common choice is ~/bin:
+
+    mkdir -p ~/bin
+    ln -s /full/path/to/fastlex.py ~/bin/fastlex
+
+Make sure ~/bin is on your PATH. Add this to your ~/.zshrc or ~/.bashrc
+if it isn't already:
+
+    export PATH="$HOME/bin:$PATH"
+
+Then reload your shell (source ~/.zshrc) and you can run FastLex from
+anywhere:
+
+    fastlex --lexicon-path my_lexicon.csv --output-path output.csv ...
+
+NOTE: The symlink target must be an absolute path (starting with /), not
+a relative one.
+
+
+3. QUICK TEST
+---------------------------------------------------------------------------
+
+A small test lexicon (18 words) is included in data/testlex.csv. To verify
+everything is working:
+
+    cd examples
+    bash run_testlex.sh
+
+This should complete in under a second and produce two files in output/:
+
+    output/testlex_flex.csv           The input lexicon with computed metrics
+    output/testlex_flex_timings.csv   Per-operation timing breakdown
+
+
+4. BASIC USAGE
+---------------------------------------------------------------------------
+
+FastLex is a command-line script. The minimal call requires four arguments:
+
+    python fastlex.py \
+      --lexicon-path <input.csv> \
+      --output-path <output.csv> \
+      --orth-col <column_name_for_orthography> \
+      --pron-col <column_name_for_pronunciation>
+
+This computes all basic neighbor metrics (deletion, addition, substitution
+neighbors, DAS total, cohorts, nohorts, homoforms, uniqueness points) for
+both orthographic and phonological forms.
+
+
+5. ADDING EDIT-DISTANCE METRICS
+---------------------------------------------------------------------------
+
+The basic metrics above are very fast. The edit-distance metrics (OLD-k,
+PLD-k, LED counts) are slower but much more informative. Add them with:
+
+    --oldk 20              Compute OLD-20 (mean distance to 20 nearest
+                           orthographic neighbors)
+    --pldk 20              Compute PLD-20 (phonological analog)
+    --old-count 5          Compute orthographic LED counts at distances 2-5
+    --pld-count 5          Compute phonological LED counts at distances 2-5
+    --old-parts            Split LED counts by relative length (shorter,
+                           same-length, longer); requires --old-count
+    --pld-parts            Same, for phonological; requires --pld-count
+
+
+6. PARALLELIZATION
+---------------------------------------------------------------------------
+
+The edit-distance computations can be parallelized across CPU cores:
+
+    --n-jobs 8             Use 8 parallel worker processes
+
+A good rule of thumb is to use about half your available CPU cores. Using
+too many cores can overheat the machine on long runs (especially for very
+large lexica like EsPal).
+
+
+7. DELIMITER OPTIONS
+---------------------------------------------------------------------------
+
+FastLex needs to know how to tokenize your forms.
+
+  --delimiter-ortho none      Each character is a token (default; typical
+                              for orthography: "cat" -> c, a, t)
+
+  --delimiter-phono space     Whitespace-delimited tokens (typical for
+                              ARPABET: "K AE T" -> K, AE, T)
+
+  --delimiter-phono none      Each character is a token (use when phonemes
+                              are single characters, as in EsPal)
+
+You can also specify a custom delimiter string if your data uses something
+other than spaces.
+
+
+8. FULL EXAMPLE
+---------------------------------------------------------------------------
+
+Here is the command for a full analysis of the English Lexicon Project:
+
+    python fastlex.py \
+      --lexicon-path data/ELP_lex_min_missing_added.csv \
+      --output-path output/elp_flex.csv \
+      --orth-col Word \
+      --pron-col Pron_arpabet \
+      --delimiter-phono space \
+      --delimiter-ortho none \
+      --n-jobs 8 \
+      --progress \
+      --oldk 20 \
+      --pldk 20 \
+      --old-count 5 --old-parts \
+      --pld-count 5 --pld-parts
+
+See the examples/ directory for ready-made scripts for several lexica.
+
+
+9. OUTPUT
+---------------------------------------------------------------------------
+
+FastLex writes two files:
+
+  (a) The output CSV: your original input columns plus all computed metrics.
+      Orthographic metrics are suffixed _or, phonological metrics _ph.
+
+      Key columns include:
+        length_ph, length_or         Token length
+        cohorts_ph, cohorts_or       Cohort count
+        nohorts_ph, nohorts_or       Nohort count
+        das_nb_ph, das_nb_or         DAS neighbor count (dels+adds+subs+homoforms)
+        dels_ph, dels_or             Deletion neighbor count
+        adds_ph, adds_or             Addition neighbor count
+        subs_ph, subs_or             Substitution neighbor count (= Coltheart's N)
+        homoforms_ph, homoforms_or   Homoform count (same token sequence)
+        UP_ph, UP_or                 Uniqueness point
+        OLD20_or, PLD20_ph           Mean distance to 20 nearest neighbors
+        LED2_or ... LED5_or          LED counts at each distance
+        LED2_or_same, _shorter, _longer   LED parts
+
+      Cohort, DAS neighbor, and nohort counts are reported independently.
+      To get non-overlapping counts, subtract nohorts from cohorts and
+      from DAS neighbors.
+
+  (b) A timings CSV (same name with _timings appended): one row per
+      computation stage, with wall-clock seconds.
+
+
+10. TIPS
+---------------------------------------------------------------------------
+
+  - If you only need basic neighbor metrics (no OLD/PLD/LED), omit the
+    --oldk, --pldk, --old-count, and --pld-count flags. This is much
+    faster, even for very large lexica.
+
+  - Use --progress to see progress bars during computation.
+
+  - Use --test-sample N to run on a random subsample of N items for
+    quick testing before committing to a full run.
+
+  - If RapidFuzz is not installed, FastLex falls back to a pure-Python
+    Levenshtein implementation. This works but is significantly slower
+    for the edit-distance metrics.
+
+
+11. GETTING HELP
+---------------------------------------------------------------------------
+
+For a full list of command-line options:
+
+    python fastlex.py --help
+
+For questions or bug reports, contact James Magnuson:
+    james.magnuson@uconn.edu
+    j.magnuson@bcbl.eu

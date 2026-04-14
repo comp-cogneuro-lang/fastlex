@@ -1,0 +1,26 @@
+#!/bin/bash
+# ============================================================================
+# Example: Run FastLex on a Basque lexicon (~29,600 forms).
+#
+# This lexicon is from the Neurospeech project (BCBL). Pronunciations are
+# space-delimited phoneme tokens.
+#
+# NOTE: You must supply your own copy of the Basque lexicon. Place the file
+# in data/ with columns "word" and "pronunciation" (space-delimited).
+# ============================================================================
+
+# Run from the fastlex-github directory.
+
+python fastlex.py \
+  --lexicon-path data/pfbl_basque_with_pron.csv \
+  --output-path output/basque_flex.csv \
+  --orth-col word \
+  --pron-col pronunciation \
+  --delimiter-phono space \
+  --delimiter-ortho none \
+  --n-jobs 8 \
+  --progress \
+  --oldk 20 \
+  --pldk 20 \
+  --old-count 5 --old-parts \
+  --pld-count 5 --pld-parts
